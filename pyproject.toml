@@ -1,0 +1,30 @@
+[project]
+name = "stock-analyst-mcp"
+version = "0.1.1"
+description = "India-only (NSE/BSE) stock MCP server with verifiable point-in-time (as_of) enforcement"
+readme = "README.md"
+authors = [
+    { name = "Shubhampm18", email = "shubhampmalik4@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "mcp==1.12.4",
+    "numpy>=2.5.4",
+    "pandas>=3.1.1",
+    "pydantic==2.11.7",
+    "pydantic-core==2.33.2",
+    "yfinance>=1.8.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[project.scripts]
+stock-analyst-mcp = "stock_analyst_mcp:main"
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+markers = ["network: network-dependent tests (skip offline)"]
