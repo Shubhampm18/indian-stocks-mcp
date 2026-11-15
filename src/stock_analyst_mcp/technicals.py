@@ -82,4 +82,132 @@ def compute_all(df: pd.DataFrame, indicators: list[str]) -> dict[str, float | No
     return out
 
 
-__all__ = ["compute_all"]
+# ---------------------------------------------------------------------------
+# Chart pattern detection (Stage 1: candlesticks + support/resistance)
+# ---------------------------------------------------------------------------
+
+def _body(o: float, c: float) -> float:
+    return abs(c - o)
+
+
+def _range_(h: float, l: float) -> float:
+    return h - l
+
+
+def _candlesticks(df: pd.DataFrame) -> list[dict[str, object]]:
+    """Scan the last 20 bars for single/two/three-bar candlestick predicates.
+
+    Each predicate is an explicit threshold check on Open/High/Low/Close
+    ratios; `confidence` is a fixed, documented strength for the shape
+    (no fitted parameters, so detection is deterministic):
+
+    - hammer: long lower wick (>= 2x body), tiny upper wick (<= 10% of
+      range), close in the upper half of the range.
+    - shooting star: mirror of hammer (long upper wick, tiny lower wick,
+      close in the lower half).
+    - doji: body <= 10% of the bar range (open ≈ close).
+    - bullish engulfing: prior bar body fully contains the earlier bar's
+      body and the prior bar closes up while the earlier closed down.
+    - bearish engulfing: mirror (prior bar closes down, prior body
+      contains the earlier up-bar's body).
+    - morning star: 3-bar; middle bar's high gaps below the prior bar's
+      low (star body entirely below), third bar closes back above the
+      midpoint of the first bar's body.
+    - evening star: mirror of morning star.
+    """
+    open_ = df["Open"].astype(float).to_numpy()
+    high = df["High"].astype(float).to_numpy()
+    low = df["Low"].astype(float).to_numpy()
+    close = df["Close"].astype(float).to_numpy()
+    dates = [str(d.date()) if hasattr(d, "date") else str(d)[:10] for d in df.index]
+    out: list[dict[str, object]] = []
+    n = len(df)
+    start = max(1, n - 20)
+    for i in range(start, n):
+        o, h, l, c = open_[i], high[i], low[i], close[i]
+        rng = _range_(h, l)
+        if rng <= 0:
+            continue
+        body = _body(o, c)
+        upper_wick = h - max(o, c)
+        lower_wick = min(o, c) - l
+        # doji: body is a negligible fraction of the range.
+        if body <= 0.10 * rng:
+            out.append({"name": "doji", "date": dates[i], "confidence": 0.7})
+        # hammer: long lower shadow, short upper shadow, close near high.
+        if lower_wick >= 2.0 * body and upper_wick <= 0.10 * rng and c >= (h + l) / 2:
+            out.append({"name": "hammer", "date": dates[i], "confidence": 0.8})
+        # shooting star: long upper shadow, short lower shadow, close near low.
+        if upper_wick >= 2.0 * body and lower_wick <= 0.10 * rng and c <= (h + l) / 2:
+            out.append({"name": "shooting_star", "date": dates[i], "confidence": 0.8})
+        # engulfing: need a valid prior bar.
+        if i >= 1:
+            po, ph, pl, pc = open_[i - 1], high[i - 1], low[i - 1], close[i - 1]
+            pbody = _body(po, pc)
+            if pc < po and c > o and min(o, c) <= min(po, pc) and max(o, c) >= max(po, pc) and body > pbody:
+                out.append({"name": "bullish_engulfing", "date": dates[i], "confidence": 0.85})
+            elif pc > po and c < o and min(o, c) <= min(po, pc) and max(o, c) >= max(po, pc) and body > pbody:
+                out.append({"name": "bearish_engulfing", "date": dates[i], "confidence": 0.85})
+        # stars: need 3 bars (i-2, i-1, i).
+        if i >= 2:
+            o1, c1 = open_[i - 2], close[i - 2]
+            h2, l2 = high[i - 1], low[i - 1]
+            o2, c2 = open_[i - 1], close[i - 1]
+            first_body_mid = (o1 + c1) / 2
+            if c1 < o1 and h2 < low[i - 2] and c >= first_body_mid:
+                out.append({"name": "morning_star", "date": dates[i], "confidence": 0.75})
+            elif c1 > o1 and l2 > high[i - 2] and c <= first_body_mid:
+                out.append({"name": "evening_star", "date": dates[i], "confidence": 0.75})
+    return out
+
+
+def _support_resistance(df: pd.DataFrame) -> dict[str, object]:
+    """Pivot-based support/resistance from rolling-window extrema (window~14).
+
+    A pivot high/low is a bar whose High/Low is the max/min over a centred
+    window of 14 bars. Levels below the last close are supports, levels
+    above are resistances; the nearest on each side is reported. Returns
+    empty levels / None nearest on insufficient bars — never errors.
+    """
+    empty: dict[str, object] = {
+        "support": [], "resistance": [],
+        "nearest_support": None, "nearest_resistance": None,
+    }
+    if len(df) < 15:
+        return empty
+    high = df["High"].astype(float)
+    low = df["Low"].astype(float)
+    close = df["Close"].astype(float)
+    window = 14
+    hi_pivots = high.rolling(window, center=True).max()
+    lo_pivots = low.rolling(window, center=True).min()
+    piv_highs = sorted({round(float(high[i]), 4) for i in high.index
+                        if pd.notna(hi_pivots[i]) and float(high[i]) == float(hi_pivots[i])})
+    piv_lows = sorted({round(float(low[i]), 4) for i in low.index
+                       if pd.notna(lo_pivots[i]) and float(low[i]) == float(lo_pivots[i])})
+    last_close = round(float(close.iloc[-1]), 4)
+    support = [p for p in piv_lows if p < last_close]
+    resistance = [p for p in piv_highs if p > last_close]
+    return {
+        "support": support,
+        "resistance": resistance,
+        "nearest_support": max(support) if support else None,
+        "nearest_resistance": min(resistance) if resistance else None,
+    }
+
+
+def compute_chart_patterns(df: pd.DataFrame) -> dict[str, object]:
+    """Candlestick patterns + pivot support/resistance (pure, no I/O).
+
+    Returns {"patterns": [{name, date, confidence}], "support_resistance":
+    {support, resistance, nearest_support, nearest_resistance}}. The
+    caller is responsible for as_of truncation; pattern dates are the
+    input index dates, so they never exceed the frame's last date.
+    """
+    return {
+        "patterns": _candlesticks(df),
+        "support_resistance": _support_resistance(df),
+    }
+
+
+__all__ = ["compute_all", "compute_chart_patterns"]

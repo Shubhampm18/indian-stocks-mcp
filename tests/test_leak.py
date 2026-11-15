@@ -260,7 +260,8 @@ def test_server_module_imports():
     names = [t.name for t in s.mcp._tool_manager.list_tools()] if hasattr(s.mcp, "_tool_manager") else []
     # FastMCP private API may vary; at minimum check the functions exist.
     for fn in ("get_ohlcv", "get_returns", "get_technical_indicators",
-               "get_risk_metrics", "get_index_history", "get_peer_comparison"):
+               "get_chart_patterns", "get_risk_metrics", "get_index_history",
+               "get_peer_comparison"):
         assert callable(getattr(s, fn))
 
 

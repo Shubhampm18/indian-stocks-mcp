@@ -1,23 +1,24 @@
 # stock-analyst-mcp
 
-MCP server for India-only (NSE/BSE) stock analysis. Six tools over historical
-price data — OHLC, returns, technical indicators, risk metrics, index history,
-peer comparison — where every tool takes an `as_of` cutoff and the server
-physically cannot return data after it.
+MCP server for India-only (NSE/BSE) stock analysis. Seven tools over historical
+price data — OHLC, returns, technical indicators, chart patterns (candlesticks
++ support/resistance), risk metrics, index history, peer comparison — where
+every tool takes an `as_of` cutoff and the server physically cannot return
+data after it.
 
 ```bash
 uvx stock-analyst-mcp        # from PyPI (no API key)
 # or from a local build:
-uvx --from ./dist/stock_analyst_mcp-0.1.0-py3-none-any.whl stock-analyst-mcp
+uvx --from ./dist/stock_analyst_mcp-0.1.2-py3-none-any.whl stock-analyst-mcp
 ```
 
 ## Install
 
 ```bash
 uv sync
-uv run pytest -q            # leak suite
+uv run pytest -q            # leak + pattern suites
 uv build
-uvx --from ./dist/stock_analyst_mcp-0.1.0-py3-none-any.whl stock-analyst-mcp
+uvx --from ./dist/stock_analyst_mcp-0.1.2-py3-none-any.whl stock-analyst-mcp
 ```
 
 ## MCP client config
@@ -49,6 +50,7 @@ Claude Desktop (config: `claude_desktop_config.json`), Cursor (`.cursor/mcp.json
 | `get_ohlcv(symbol, as_of?, lookback_days=90)` | Daily OHLC + rebuilt adjusted close + `adjustment_history` |
 | `get_returns(symbol, as_of?, windows=[1,5,20,60])` | Simple/log returns per window (pandas) |
 | `get_technical_indicators(symbol, as_of?, indicators=[…])` | SMA/EMA/RSI/MACD/Bollinger/ATR/VWAP computed in Python, never LLM math; `trend` field |
+| `get_chart_patterns(symbol, as_of?, lookback_days=120)` | Candlestick patterns (hammer, shooting star, doji, engulfing, stars) over the last 20 bars + pivot support/resistance levels with nearest levels |
 | `get_risk_metrics(symbol, as_of?, benchmark="^NSEI", lookback_days=252)` | Sharpe, Sortino, max drawdown (start/end), volatility, beta, alpha |
 | `get_index_history(index, as_of?, lookback_days=90)` | `^NSEI` / `^BSESN` / `^NSEBANK` close series |
 | `get_peer_comparison(symbols, as_of?, metric="return_20d")` | Side-by-side values + ranks on one metric |
@@ -84,7 +86,7 @@ get_peer_comparison(symbols=["RELIANCE.NS", "TCS.NS"], as_of="2025-12-31", metri
 uv run pytest -q
 ```
 
-Leak suite (8 passing, 6 network-dependent tests skipped when the network is unavailable — the pure-logic cutoff/vintage tests never skip).
+Leak + pattern suites: 34 passing (16 point-in-time/leak tests + 18 chart-pattern tests; the 3 network-dependent leak tests skip when offline — the pure-logic cutoff/vintage/pattern tests never skip).
 
 ## Credits
 

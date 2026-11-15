@@ -1,6 +1,6 @@
 [project]
 name = "stock-analyst-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "India-only (NSE/BSE) stock MCP server with verifiable point-in-time (as_of) enforcement"
 readme = "README.md"
 authors = [
@@ -11,6 +11,7 @@ dependencies = [
     "mcp==1.12.4",
     "numpy>=2.5.4",
     "pandas>=3.1.1",
+    "pyarrow>=24.0.0",
     "pydantic==2.11.7",
     "pydantic-core==2.33.2",
     "yfinance>=1.8.0",

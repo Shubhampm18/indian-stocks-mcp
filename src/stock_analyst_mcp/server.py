@@ -5,7 +5,7 @@ logging goes to stderr. Every tool output carries ``source``, ``as_of``
 (the effective cutoff, echoed), and ``currency``.
 
 Tools (all take ``as_of`` as an optional YYYY-MM-DD cutoff):
-  get_ohlcv, get_returns, get_technical_indicators,
+  get_ohlcv, get_returns, get_technical_indicators, get_chart_patterns,
   get_risk_metrics, get_index_history, get_peer_comparison
 """
 
@@ -42,6 +42,7 @@ mcp = FastMCP(
     instructions=(
         "India-only (NSE/BSE) stock analysis over historical price data. "
         "Prefer get_ohlcv/get_returns/get_technical_indicators for price questions. "
+        "Use get_chart_patterns for 'any hammer/doji/support/resistance?' questions. "
         "Pass as_of (YYYY-MM-DD) to ask 'as of that date' — results are cut off "
         "at that date and adjusted prices rebuilt only from actions known by then. "
         "Do not invent numbers; compute from tool output."
@@ -145,6 +146,24 @@ def get_technical_indicators(symbol: str, as_of: str | None = None,
             "indicators": out,
             **_meta(str(d) if d else str(df.index[-1].date()), str(df.index[-1].date()),
                     extra={"computed_in": "pandas/numpy (no LLM math)"}),
+        }
+    except (UnknownSymbolError, FutureDateError, ValueError) as exc:
+        return _err(str(exc))
+
+
+@mcp.tool()
+def get_chart_patterns(symbol: str, as_of: str | None = None, lookback_days: int = 120) -> dict[str, Any]:
+    """Candlestick patterns (hammer, doji, engulfing, stars) + support/resistance."""
+    try:
+        from .technicals import compute_chart_patterns
+
+        df, d, _, _ = _get_frame(symbol, as_of, lookback_days or 120)
+        patterns = compute_chart_patterns(df)
+        return {
+            "symbol": normalise_symbol(symbol),
+            "patterns": patterns["patterns"],
+            "support_resistance": patterns["support_resistance"],
+            **_meta(str(d) if d else str(df.index[-1].date()), str(df.index[-1].date())),
         }
     except (UnknownSymbolError, FutureDateError, ValueError) as exc:
         return _err(str(exc))
