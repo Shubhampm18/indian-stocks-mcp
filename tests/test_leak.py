@@ -411,7 +411,10 @@ def test_stdio_no_stdout_pollution():
         assert msg.get("jsonrpc") == "2.0"
         assert msg.get("id") == 1
         server_info = msg["result"]["serverInfo"]
-        assert server_info["name"] == "stock-analyst-mcp"
+        # serverInfo.name must be the PRODUCT identity (distribution
+        # indian-stocks-mcp), not the legacy import-package name — this is
+        # the lock that keeps the announced identity from drifting.
+        assert server_info["name"] == "indian-stocks-mcp"
         # serverInfo.version must reflect the package, not the SDK (1.12.4)
         assert server_info["version"] != "1.12.4"
         assert server_info["version"] == stock_analyst_mcp.__version__

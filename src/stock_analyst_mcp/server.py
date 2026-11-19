@@ -1,4 +1,4 @@
-"""stock-analyst-mcp — MCP server for India-only (NSE/BSE) stock analysis.
+"""indian-stocks-mcp — MCP server for India-only (NSE/BSE) stock analysis.
 
 Stdio transport. Never ``print()`` to stdout (corrupts JSON-RPC). All
 logging goes to stderr. Every tool output carries ``source``, ``as_of``
@@ -41,10 +41,10 @@ log = logging.getLogger("stock_analyst_mcp.server")
 try:
     _PACKAGE_VERSION = metadata.version("indian-stocks-mcp")
 except metadata.PackageNotFoundError:  # not installed (e.g. bare src checkout)
-    _PACKAGE_VERSION = "0.2.1"  # literal fallback: keep in sync with pyproject.toml
+    _PACKAGE_VERSION = "0.2.2"  # literal fallback: keep in sync with pyproject.toml
 
 mcp = FastMCP(
-    "stock-analyst-mcp",
+    "indian-stocks-mcp",  # product identity (import package stays stock_analyst_mcp)
     instructions=(
         "India-only (NSE/BSE) stock analysis over historical price data. "
         "Prefer get_ohlcv/get_returns/get_technical_indicators for price questions. "
@@ -370,7 +370,7 @@ def profile_resource(symbol: str) -> str:
 
 
 def main() -> None:
-    log_to_stderr("stock-analyst-mcp starting (stdio) …")
+    log_to_stderr("indian-stocks-mcp starting (stdio) …")
     mcp.run()
 
 

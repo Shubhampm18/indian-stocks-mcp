@@ -1,6 +1,6 @@
 [project]
 name = "indian-stocks-mcp"
-version = "0.2.1"
+version = "0.2.2"
 description = "India-only (NSE/BSE) stock MCP server with verifiable point-in-time (as_of) enforcement"
 readme = "README.md"
 license = { file = "LICENSE" }

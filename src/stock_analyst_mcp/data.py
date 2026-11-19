@@ -1,4 +1,4 @@
-"""Data layer for stock-analyst-mcp.
+"""Data layer for indian-stocks-mcp.
 
 yfinance fetching, local Parquet caching (24h TTL), point-in-time enforcement,
 and the adjustment-vintage rebuild (adjusted close recomputed from corporate
