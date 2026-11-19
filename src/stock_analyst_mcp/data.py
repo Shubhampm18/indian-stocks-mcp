@@ -129,7 +129,7 @@ def fetch_history(symbol: str, period: str = "max", not_found_ok: bool = False,
             try:
                 df = pd.read_parquet(cache)
                 if not df.empty:
-                    return df
+                    return _drop_unfinalised_rows(df)
             except Exception as exc:
                 log.warning("cache read failed for %s: %s", sym, exc)
         else:
@@ -160,12 +160,29 @@ def fetch_history(symbol: str, period: str = "max", not_found_ok: bool = False,
     df = hist.copy()
     df.index = pd.to_datetime(df.index).tz_convert("Asia/Kolkata").tz_localize(None)
     df = df.sort_index()
+    df = _drop_unfinalised_rows(df)
     if period == "max" and cache.parent.exists():
         try:
             df.to_parquet(cache)
         except Exception as exc:
             log.warning("cache write failed for %s: %s", sym, exc)
     return df
+
+
+def _drop_unfinalised_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop rows with NaN/zero Close (yfinance sometimes appends an
+    unfinalised current-day row whose OHLC is empty). One such row poisons
+    every downstream consumer: last close, returns, and the S/R pivot
+    comparisons (``p < NaN`` is always False, so all levels vanish).
+    Volume-only NaN is tolerated (indices carry no volume)."""
+    if df.empty or "Close" not in df.columns:
+        return df
+    close = pd.to_numeric(df["Close"], errors="coerce")
+    keep = close.notna() & (close != 0)
+    dropped = int((~keep).sum())
+    if dropped:
+        log.warning("dropped %d unfinalised row(s) with empty Close", dropped)
+    return df.loc[keep]
 
 
 def fetch_actions(symbol: str) -> pd.DataFrame:

@@ -108,6 +108,28 @@ def test_parse_as_of_rejects_future_date():
         _parse_as_of(FUTURE_DATE)
 
 
+def test_drop_unfinalised_rows():
+    """A NaN/zero Close row (yfinance unfinalised day) must be dropped,
+    volume-only NaN must be kept."""
+    from stock_analyst_mcp.data import _drop_unfinalised_rows
+
+    idx = pd.to_datetime(["2026-11-17", "2026-11-18", "2026-11-19"])
+    df = pd.DataFrame(
+        {
+            "Open": [100.0, float("nan"), 102.0],
+            "High": [101.0, float("nan"), 103.0],
+            "Low": [99.0, float("nan"), 101.0],
+            "Close": [100.5, float("nan"), 0.0],
+            "Volume": [1_000.0, float("nan"), 2_000.0],
+        },
+        index=idx,
+    )
+    out = _drop_unfinalised_rows(df)
+    assert list(out.index.date) == [idx[0].date()]
+    assert out["Close"].iloc[0] == 100.5
+    assert not out["Close"].isna().any() and not (out["Close"] == 0).any()
+
+
 def test_enforce_as_of_filters_and_asserts(history: pd.DataFrame, sample_date: str):
     d = _parse_as_of(sample_date)
     filtered = enforce_as_of(history, d)
