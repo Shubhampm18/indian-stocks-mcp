@@ -254,6 +254,61 @@ def test_regression_no_row_after_as_of(history):
     assert filtered.index.max().date() <= d
 
 
+def test_rows_used_is_pre_trim_count(history, monkeypatch):
+    """rows_used must equal the as_of-filtered row count BEFORE lookback
+    trimming — pinned by driving the REAL _get_frame with synthetic I/O."""
+    import stock_analyst_mcp.data as data_mod
+
+    df = history.copy()
+    monkeypatch.setattr(data_mod, "fetch_history", lambda symbol, **kw: df)
+    monkeypatch.setattr(data_mod, "fetch_actions", lambda symbol: pd.DataFrame(
+        columns=["Dividends", "Stock Splits"]))
+
+    lookback = 30
+    filtered, d, _hist, _actions = data_mod._get_frame(SYMBOL, None, lookback)
+    assert len(filtered) == lookback            # returned slice is trimmed
+    assert filtered.attrs["rows_used"] == len(history)  # pre-trim count
+    assert filtered.attrs["rows_used"] > len(filtered)  # honesty: they differ
+
+    # lookback larger than history -> the two are equal
+    filtered2, *_ = data_mod._get_frame(SYMBOL, None, len(history) + 5)
+    assert filtered2.attrs["rows_used"] == len(filtered2) == len(history)
+
+
+def test_rows_used_lands_in_meta_envelope(history, monkeypatch):
+    """Every tool's envelope must carry rows_used; the offline fake proves
+    the wiring, test_rows_used_is_pre_trim_count proves the number."""
+    import stock_analyst_mcp.server as server
+
+    df = history.copy()
+    df["CloseAdj"] = df["Close"].astype(float)  # tools read CloseAdj
+    df.attrs["rows_used"] = 4242  # set AFTER column ops (attrs can be dropped)
+    monkeypatch.setattr(server, "_get_frame",
+                        lambda symbol, as_of, lookback=90: (df, None, [], []))
+
+    for call in (
+        lambda: server.get_ohlcv(SYMBOL),
+        lambda: server.get_returns(SYMBOL),
+        lambda: server.get_technical_indicators(SYMBOL),
+        lambda: server.get_risk_metrics(SYMBOL),
+        lambda: server.get_index_history(SYMBOL),
+    ):
+        out = call()
+        assert out.get("rows_used") == 4242, out.get("rows_used")
+
+    # chart_patterns + peer_comparison (fake has no attrs -> rows_used None)
+    out = server.get_peer_comparison([SYMBOL], as_of=None)
+    assert "rows_used" in out  # key always present in the envelope
+
+
+def test_profile_resource_labels_mapping_as_unverified():
+    import stock_analyst_mcp.server as server
+
+    profile = server.profile_resource("RELIANCE.BO")
+    assert "Mapping: suffix-based, not verified against the exchange" in profile
+    assert "Exchange: BSE" in profile  # suffix-derived, per the mapping line
+
+
 # --- network-dependent tests (skip only when network is actually down) -----
 
 @network

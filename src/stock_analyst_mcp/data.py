@@ -273,19 +273,34 @@ def enforce_as_of(df: pd.DataFrame, as_of: date | None) -> pd.DataFrame:
 
 
 def _get_frame(symbol: str, as_of: str | None, lookback_days: int = 90):
-    """Fetch, filter to as_of, and take the final lookback_days rows."""
+    """Fetch, filter to as_of, and take the final lookback_days rows.
+
+    Returns ``(filtered, d, history, actions)`` — the tuple arity is part of
+    the contract consumed by server tools, the dashboard, and tests.
+
+    The returned frame carries ``attrs["rows_used"]``: the number of rows
+    available after as_of filtering **before** the lookback tail-trim. That
+    is the honest provenance number — it tells the caller how much data
+    existed at the cutoff, even when the returned slice is shorter (a
+    lookback_days larger than the available history yields
+    rows_used == len(returned frame); a smaller lookback yields
+    rows_used > len(returned frame)).
+    """
     if lookback_days is None or lookback_days <= 0:
         lookback_days = 90
     df = fetch_history(symbol)
     actions = fetch_actions(symbol)
     d = _parse_as_of(as_of)
     filtered = enforce_as_of(df, d)
+    rows_used = len(filtered)  # pre-trim: everything the cutoff admits
     adj_close, history = rebuild_adjusted_with_actions(df, actions, d)
     # Attach rebuilt adjusted close (aligned to filtered rows)
     filtered = filtered.copy()
     filtered["CloseAdj"] = adj_close.loc[filtered.index]
     # Last lookback_days rows
     filtered = filtered.tail(lookback_days)
+    # Set AFTER tail() so propagation quirks can't drop it.
+    filtered.attrs["rows_used"] = rows_used
     return filtered, d, history, actions
 
 

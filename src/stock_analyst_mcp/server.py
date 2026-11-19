@@ -64,12 +64,20 @@ mcp = FastMCP(
 mcp._mcp_server.version = _PACKAGE_VERSION
 
 
-def _meta(as_of_eff: str, data_through: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+def _meta(as_of_eff: str, data_through: str, extra: dict[str, Any] | None = None,
+          rows_used: int | None = None) -> dict[str, Any]:
+    """Provenance envelope for every tool.
+
+    ``rows_used`` = rows available after as_of filtering, BEFORE the
+    lookback tail-trim (see data._get_frame). It is the honest "how much
+    data existed at the cutoff" number; the returned slice may be shorter.
+    """
     m: dict[str, Any] = {
         "source": SOURCE,
         "as_of": as_of_eff,
         "data_through": data_through,
         "currency": "INR",
+        "rows_used": rows_used,
     }
     if extra:
         m.update(extra)
@@ -103,7 +111,7 @@ def get_ohlcv(symbol: str, as_of: str | None = None, lookback_days: int = 90) ->
             "rows": rows,
             "n_rows": len(rows),
             "adjustment_history": history,
-            **_meta(as_of_eff, str(df.index.max().date())),
+            **_meta(as_of_eff, str(df.index.max().date()), rows_used=df.attrs.get("rows_used")),
         }
     except (UnknownSymbolError, FutureDateError, ValueError) as exc:
         return _err(str(exc))
@@ -133,7 +141,7 @@ def get_returns(symbol: str, as_of: str | None = None, windows: list[int] | None
         return {
             "symbol": normalise_symbol(symbol),
             "returns": results,
-            **_meta(str(d) if d else str(closes.index[-1].date()), str(closes.index[-1].date())),
+            **_meta(str(d) if d else str(closes.index[-1].date()), str(closes.index[-1].date()), rows_used=df.attrs.get("rows_used")),
         }
     except (UnknownSymbolError, FutureDateError, ValueError) as exc:
         return _err(str(exc))
@@ -159,7 +167,8 @@ def get_technical_indicators(symbol: str, as_of: str | None = None,
             "trend": trend,
             "indicators": out,
             **_meta(str(d) if d else str(df.index[-1].date()), str(df.index[-1].date()),
-                    extra={"computed_in": "pandas/numpy (no LLM math)"}),
+                    extra={"computed_in": "pandas/numpy (no LLM math)"},
+                    rows_used=df.attrs.get("rows_used")),
         }
     except (UnknownSymbolError, FutureDateError, ValueError) as exc:
         return _err(str(exc))
@@ -177,7 +186,8 @@ def get_chart_patterns(symbol: str, as_of: str | None = None, lookback_days: int
             "symbol": normalise_symbol(symbol),
             "patterns": patterns["patterns"],
             "support_resistance": patterns["support_resistance"],
-            **_meta(str(d) if d else str(df.index[-1].date()), str(df.index[-1].date())),
+            **_meta(str(d) if d else str(df.index[-1].date()), str(df.index[-1].date()),
+                    rows_used=df.attrs.get("rows_used")),
         }
     except (UnknownSymbolError, FutureDateError, ValueError) as exc:
         return _err(str(exc))
@@ -234,7 +244,7 @@ def get_risk_metrics(symbol: str, as_of: str | None = None, benchmark: str = "^N
             "alpha_vs_benchmark": round(alpha, 4) if alpha is not None else None,
             "n_observations": int(len(sym_ret)),
             **_meta(str(d) if d else str(sym_ret.index[-1].date()) if len(sym_ret) else "",
-                    str(df.index[-1].date())),
+                    str(df.index[-1].date()), rows_used=df.attrs.get("rows_used")),
         }
     except (UnknownSymbolError, FutureDateError, ValueError) as exc:
         return _err(str(exc))
@@ -254,7 +264,8 @@ def get_index_history(index: str, as_of: str | None = None, lookback_days: int =
             "index": normalise_symbol(index),
             "rows": rows,
             "n_rows": len(rows),
-            **_meta(str(d) if d else str(df.index[-1].date()), str(df.index[-1].date())),
+            **_meta(str(d) if d else str(df.index[-1].date()), str(df.index[-1].date()),
+                    rows_used=df.attrs.get("rows_used")),
         }
     except (UnknownSymbolError, FutureDateError, ValueError) as exc:
         return _err(str(exc))
@@ -317,7 +328,8 @@ def get_peer_comparison(symbols: list[str], as_of: str | None = None,
         "results": results,
         "ranked": ranked,
         "errors": errors,
-        **_meta(as_of_eff or "latest", str(df.index[-1].date()) if df is not None and not df.empty else ""),
+        **_meta(as_of_eff or "latest", str(df.index[-1].date()) if df is not None and not df.empty else "",
+               rows_used=df.attrs.get("rows_used") if df is not None else None),
     }
 
 
@@ -329,12 +341,19 @@ def watchlist_resource() -> str:
 
 @mcp.resource("stock://{symbol}/profile")
 def profile_resource(symbol: str) -> str:
-    """Text profile for a symbol (exchange, currency, market hours)."""
+    """Text profile for a symbol (exchange, currency, market hours).
+
+    Honesty note: the exchange is derived from the ticker suffix only
+    (".NS" -> NSE, ".BO" -> BSE) and is NOT verified against the exchange.
+    The ``Mapping`` line says so; agents/dashboards should display it
+    alongside the exchange rather than presenting it as verified fact.
+    """
     sym = normalise_symbol(symbol)
     exchange = "NSE" if sym.endswith(".NS") else "BSE" if sym.endswith(".BO") else "INDEX"
     return (
         f"Symbol: {sym}\n"
         f"Exchange: {exchange}\n"
+        f"Mapping: suffix-based, not verified against the exchange\n"
         f"Currency: INR\n"
         f"Market hours: 09:15-15:30 IST (Mon-Fri, NSE/BSE)\n"
         f"Source: {SOURCE}\n"
