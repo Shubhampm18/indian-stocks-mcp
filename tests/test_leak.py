@@ -152,6 +152,15 @@ def test_normalise_symbol_suffixes():
     assert normalise_symbol("SENSEX") == "^BSESN"
 
 
+def test_normalise_symbol_alias_variants():
+    """Spelled-out index names must map to index tickers, not become
+    "NIFTY 50.NS" via the bare-ticker .NS default."""
+    assert normalise_symbol("NIFTY 50") == "^NSEI"
+    assert normalise_symbol("BANKNIFTY") == "^NSEBANK"
+    # explicit suffix still wins over the alias table
+    assert normalise_symbol("NIFTY.NS") == "NIFTY.NS"
+
+
 def test_did_you_mean_handles_transposition():
     """README promises suggestions; difflib must catch transpositions that
     prefix matching misses ("RELIIANCE" -> "RELIANCE.NS")."""

@@ -92,8 +92,10 @@ def normalise_symbol(symbol: str) -> str:
     if s in {"TCS", "INFY", "RELIANCE", "HDFCBANK", "ICICIBANK", "SBIN", "ITC",
              "TATAMOTORS", "TATAMOTORS.NS"}:
         return f"{s}.NS" if not s.endswith(".NS") else s
-    # index aliases
+    # index aliases (alias table kept in sync with memory._default_normalise_symbol
+    # in stock-analyst-app — see the parity test there)
     alias = {"NIFTY": "^NSEI", "NIFTY50": "^NSEI", "NIFTY_50": "^NSEI",
+             "NIFTY 50": "^NSEI", "BANKNIFTY": "^NSEBANK",
              "SENSEX": "^BSESN", "NIFTY BANK": "^NSEBANK"}
     if s in alias:
         return alias[s]
