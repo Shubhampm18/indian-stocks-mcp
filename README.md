@@ -86,7 +86,7 @@ get_peer_comparison(symbols=["RELIANCE.NS", "TCS.NS"], as_of="2025-12-31", metri
 uv run pytest -q
 ```
 
-Leak + pattern suites: 40 passing (21 point-in-time/leak/provenance tests + 19 chart-pattern tests; the 3 network-dependent leak tests skip when offline — the pure-logic cutoff/vintage/pattern tests never skip).
+Leak + pattern suites: 41 passing (21 point-in-time/leak/provenance tests + 20 chart-pattern tests; the 3 network-dependent leak tests skip when offline — the pure-logic cutoff/vintage/pattern tests never skip).
 
 ## License
 

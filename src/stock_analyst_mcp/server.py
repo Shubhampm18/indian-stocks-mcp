@@ -41,7 +41,7 @@ log = logging.getLogger("stock_analyst_mcp.server")
 try:
     _PACKAGE_VERSION = metadata.version("stock-analyst-mcp")
 except metadata.PackageNotFoundError:  # not installed (e.g. bare src checkout)
-    _PACKAGE_VERSION = "0.2.0"  # literal fallback: keep in sync with pyproject.toml
+    _PACKAGE_VERSION = "0.2.1"  # literal fallback: keep in sync with pyproject.toml
 
 mcp = FastMCP(
     "stock-analyst-mcp",
