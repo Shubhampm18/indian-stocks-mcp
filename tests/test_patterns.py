@@ -196,6 +196,24 @@ def test_candlesticks_only_scan_last_20(synthetic_history):
     assert all(p["date"] in window for p in patterns)
 
 
+def test_scan_window_parameter_bounds_visibility():
+    """window=5 must find nothing when the only pattern is 12 bars back;
+    window=20 must find it. The doji bug is now impossible by construction:
+    the caller controls the scan width explicitly instead of relying on a
+    prompt instruction to pass a big lookback."""
+    bars = _flat(11)
+    bars.append((100.05, 101.0, 99.0, 100.05))  # doji, 12th bar from the end
+    bars.extend(_flat(12))                       # 12 quiet bars after it
+    frame = _frame(bars)                         # 24 bars; doji sits 12 bars back
+    assert _candlesticks(frame, window=5) == []
+    assert "doji" in {p["name"] for p in _candlesticks(frame, window=20)}
+    # the pure entry point honours the same parameter
+    from stock_analyst_mcp.technicals import compute_chart_patterns
+
+    assert compute_chart_patterns(frame, window=5)["patterns"] == []
+    assert "doji" in {p["name"] for p in compute_chart_patterns(frame, window=20)["patterns"]}
+
+
 # ---------------------------------------------------------------------------
 # Server wiring: get_chart_patterns must be a registered MCP tool
 # ---------------------------------------------------------------------------

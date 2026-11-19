@@ -94,8 +94,9 @@ def _range_(h: float, l: float) -> float:
     return h - l
 
 
-def _candlesticks(df: pd.DataFrame) -> list[dict[str, object]]:
-    """Scan the last 20 bars for single/two/three-bar candlestick predicates.
+def _candlesticks(df: pd.DataFrame, window: int = 20) -> list[dict[str, object]]:
+    """Scan the last ``window`` bars for single/two/three-bar candlestick
+    predicates.
 
     Each predicate is an explicit threshold check on Open/High/Low/Close
     ratios; `confidence` is a fixed, documented strength for the shape
@@ -122,7 +123,7 @@ def _candlesticks(df: pd.DataFrame) -> list[dict[str, object]]:
     dates = [str(d.date()) if hasattr(d, "date") else str(d)[:10] for d in df.index]
     out: list[dict[str, object]] = []
     n = len(df)
-    start = max(1, n - 20)
+    start = max(1, n - max(1, int(window)))
     for i in range(start, n):
         o, h, l, c = open_[i], high[i], low[i], close[i]
         rng = _range_(h, l)
@@ -196,16 +197,20 @@ def _support_resistance(df: pd.DataFrame) -> dict[str, object]:
     }
 
 
-def compute_chart_patterns(df: pd.DataFrame) -> dict[str, object]:
+def compute_chart_patterns(df: pd.DataFrame, window: int = 20) -> dict[str, object]:
     """Candlestick patterns + pivot support/resistance (pure, no I/O).
 
+    ``window`` = how many trailing bars the candlestick scan inspects
+    (default 20). A pattern older than the scan window is invisible by
+    construction — pass a larger window to look further back; the caller
+    is responsible for as_of truncation, and pattern dates are the input
+    index dates, so they never exceed the frame's last date.
+
     Returns {"patterns": [{name, date, confidence}], "support_resistance":
-    {support, resistance, nearest_support, nearest_resistance}}. The
-    caller is responsible for as_of truncation; pattern dates are the
-    input index dates, so they never exceed the frame's last date.
+    {support, resistance, nearest_support, nearest_resistance}}.
     """
     return {
-        "patterns": _candlesticks(df),
+        "patterns": _candlesticks(df, window=window),
         "support_resistance": _support_resistance(df),
     }
 

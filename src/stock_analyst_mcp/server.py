@@ -175,17 +175,26 @@ def get_technical_indicators(symbol: str, as_of: str | None = None,
 
 
 @mcp.tool()
-def get_chart_patterns(symbol: str, as_of: str | None = None, lookback_days: int = 120) -> dict[str, Any]:
-    """Candlestick patterns (hammer, doji, engulfing, stars) + support/resistance."""
+def get_chart_patterns(symbol: str, as_of: str | None = None, lookback_days: int = 120,
+                       window: int = 20) -> dict[str, Any]:
+    """Candlestick patterns (hammer, doji, engulfing, stars) + support/resistance.
+
+    ``window`` = trailing-bar scan width for the candlestick detector
+    (default 20). A pattern older than the last ``window`` bars cannot be
+    reported — raise ``window`` to look further back (bounded by lookback_days).
+    """
     try:
         from .technicals import compute_chart_patterns
 
+        if window is None or int(window) < 1:
+            return _err("window must be a positive integer")
         df, d, _, _ = _get_frame(symbol, as_of, lookback_days or 120)
-        patterns = compute_chart_patterns(df)
+        patterns = compute_chart_patterns(df, window=int(window))
         return {
             "symbol": normalise_symbol(symbol),
             "patterns": patterns["patterns"],
             "support_resistance": patterns["support_resistance"],
+            "scan_window": int(window),
             **_meta(str(d) if d else str(df.index[-1].date()), str(df.index[-1].date()),
                     rows_used=df.attrs.get("rows_used")),
         }
