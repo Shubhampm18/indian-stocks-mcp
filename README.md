@@ -88,6 +88,8 @@ uv run pytest -q
 
 Leak + pattern suites: 41 passing (21 point-in-time/leak/provenance tests + 20 chart-pattern tests; the 3 network-dependent leak tests skip when offline — the pure-logic cutoff/vintage/pattern tests never skip).
 
+**Console-script note:** the current command is `indian-stocks-mcp`. The distribution also registers a legacy `stock-analyst-mcp` script for back-compat with older local invocations — it runs the same `stock_analyst_mcp:main` entry point.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
