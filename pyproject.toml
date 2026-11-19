@@ -1,5 +1,5 @@
 [project]
-name = "stock-analyst-mcp"
+name = "indian-stocks-mcp"
 version = "0.2.1"
 description = "India-only (NSE/BSE) stock MCP server with verifiable point-in-time (as_of) enforcement"
 readme = "README.md"
@@ -22,11 +22,21 @@ dependencies = [
 dev = ["pytest>=8"]
 
 [project.scripts]
+# Distribution renamed to indian-stocks-mcp (the old PyPI name belongs to an
+# unrelated project). The import package stays stock_analyst_mcp. A legacy
+# console script "stock-analyst-mcp" is kept so existing local invocations
+# (client.py/chat.py style) keep working from installed dists.
+indian-stocks-mcp = "stock_analyst_mcp:main"
 stock-analyst-mcp = "stock_analyst_mcp:main"
 
 [build-system]
 requires = ["uv_build>=0.12.10,<0.13.0"]
 build-backend = "uv_build"
+
+# Distribution renamed to indian-stocks-mcp but the import package stays
+# stock_analyst_mcp — uv_build would otherwise infer src/indian_stocks_mcp.
+[tool.uv.build-backend]
+module-name = "stock_analyst_mcp"
 
 [tool.pytest.ini_options]
 markers = ["network: network-dependent tests (skip offline)"]

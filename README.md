@@ -1,4 +1,4 @@
-# stock-analyst-mcp
+# indian-stocks-mcp
 
 MCP server for India-only (NSE/BSE) stock analysis. Seven tools over historical
 price data — OHLC, returns, technical indicators, chart patterns (candlesticks
@@ -7,9 +7,9 @@ every tool takes an `as_of` cutoff and the server physically cannot return
 data after it.
 
 ```bash
-# Not on PyPI — the distribution name belongs to an unrelated package.
+# Distributed as **indian-stocks-mcp** (the previous name `stock-analyst-mcp` belongs to an unrelated PyPI project, so this server is not installable under it).
 # Run from a local build (no API key):
-uvx --from ./dist/stock_analyst_mcp-0.2.1-py3-none-any.whl stock-analyst-mcp
+uvx --from ./dist/indian_stocks_mcp-0.2.1-py3-none-any.whl indian-stocks-mcp
 ```
 
 ## Install
@@ -18,7 +18,7 @@ uvx --from ./dist/stock_analyst_mcp-0.2.1-py3-none-any.whl stock-analyst-mcp
 uv sync
 uv run pytest -q            # leak + pattern suites
 uv build
-uvx --from ./dist/stock_analyst_mcp-0.2.1-py3-none-any.whl stock-analyst-mcp
+uvx --from ./dist/indian_stocks_mcp-0.2.1-py3-none-any.whl indian-stocks-mcp
 ```
 
 ## MCP client config
@@ -28,7 +28,7 @@ uvx --from ./dist/stock_analyst_mcp-0.2.1-py3-none-any.whl stock-analyst-mcp
   "mcpServers": {
     "stock-analyst": {
       "command": "uvx",
-      "args": ["--from", "/absolute/path/to/stock-analyst-mcp/dist/stock_analyst_mcp-0.2.1-py3-none-any.whl", "stock-analyst-mcp"]
+      "args": ["--from", "/absolute/path/to/stock-analyst-mcp/dist/indian_stocks_mcp-0.2.1-py3-none-any.whl", "indian-stocks-mcp"]
     }
   }
 }
