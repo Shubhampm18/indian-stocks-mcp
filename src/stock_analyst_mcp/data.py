@@ -12,10 +12,11 @@ still attempt ``.NS`` and then error with "Did you mean...?" suggestions.
 
 from __future__ import annotations
 
+import difflib
 import logging
 import re
 import sys
-from datetime import date, time
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -102,9 +103,25 @@ def normalise_symbol(symbol: str) -> str:
 
 
 def _did_you_mean(symbol: str) -> list[str]:
+    """Prefix/substring matches merged with fuzzy matches (difflib), deduped.
+
+    difflib catches transpositions ("RELIIANCE" -> "RELIANCE.NS") that
+    prefix matching alone misses.
+    """
     s = re.sub(r"\.(NS|BO)$", "", symbol.strip().upper())
-    suggestions = [w for w in WATCHLIST if s and (w.startswith(s) or s in w)]
-    return suggestions[:3]
+    if not s:
+        return []
+    prefix = [w for w in WATCHLIST if w.startswith(s) or s in w]
+    fuzzy = difflib.get_close_matches(s, [re.sub(r"\.(NS|BO)$", "", w) for w in WATCHLIST],
+                                      n=3, cutoff=0.6)
+    fuzzy_full = [f"{t}.NS" if f"{t}.NS" in WATCHLIST else t for t in fuzzy]
+    seen: set[str] = set()
+    out: list[str] = []
+    for w in prefix + fuzzy_full:
+        if w not in seen:
+            seen.add(w)
+            out.append(w)
+    return out[:3]
 
 
 def _cache_path(symbol: str) -> Path:
@@ -197,12 +214,6 @@ def fetch_actions(symbol: str) -> pd.DataFrame:
     actions = actions.copy()
     actions.index = pd.to_datetime(actions.index).tz_convert("Asia/Kolkata").tz_localize(None)
     return actions.sort_index()
-
-
-def rebuild_adjusted(df: pd.DataFrame, as_of: date | None) -> tuple[pd.Series, list[dict[str, Any]]]:
-    """Back-compat shim — use rebuild_adjusted_with_actions for the live path."""
-    raw = df["Close"].astype(float).copy()
-    return raw, []
 
 
 def rebuild_adjusted_with_actions(df: pd.DataFrame, actions: pd.DataFrame,

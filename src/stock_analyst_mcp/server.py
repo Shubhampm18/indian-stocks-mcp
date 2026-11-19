@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from importlib import metadata
 from typing import Any
 
 import numpy as np
@@ -37,6 +38,11 @@ logging.basicConfig(
 )
 log = logging.getLogger("stock_analyst_mcp.server")
 
+try:
+    _PACKAGE_VERSION = metadata.version("stock-analyst-mcp")
+except metadata.PackageNotFoundError:  # not installed (e.g. bare src checkout)
+    _PACKAGE_VERSION = "0.1.3"  # literal fallback: keep in sync with pyproject.toml
+
 mcp = FastMCP(
     "stock-analyst-mcp",
     instructions=(
@@ -48,6 +54,14 @@ mcp = FastMCP(
         "Do not invent numbers; compute from tool output."
     ),
 )
+
+# FastMCP 1.12.4 has no ``version`` parameter and does not forward one to the
+# lowlevel Server, so serverInfo.version would report the *SDK* version
+# (pkg_version("mcp") -> "1.12.4"). The lowlevel Server exposes a plain
+# ``version`` attribute that the initialize handler reads
+# (mcp/server/lowlevel/server.py:145,174), so setting it here is the only
+# route to make serverInfo.version reflect *this* package's version.
+mcp._mcp_server.version = _PACKAGE_VERSION
 
 
 def _meta(as_of_eff: str, data_through: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:

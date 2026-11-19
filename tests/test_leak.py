@@ -16,12 +16,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import stock_analyst_mcp
 from stock_analyst_mcp.data import (
     FutureDateError,
     enforce_as_of,
     fetch_history,
     normalise_symbol,
     rebuild_adjusted_with_actions,
+    _did_you_mean,
     _get_frame,
     _parse_as_of,
 )
@@ -148,6 +150,15 @@ def test_normalise_symbol_suffixes():
     assert normalise_symbol("^NSEI") == "^NSEI"
     assert normalise_symbol("NIFTY") == "^NSEI"
     assert normalise_symbol("SENSEX") == "^BSESN"
+
+
+def test_did_you_mean_handles_transposition():
+    """README promises suggestions; difflib must catch transpositions that
+    prefix matching misses ("RELIIANCE" -> "RELIANCE.NS")."""
+    out = _did_you_mean("RELIIANCE")
+    assert "RELIANCE.NS" in out
+    # Exact-ish prefix matching still works.
+    assert "RELIANCE.NS" in _did_you_mean("RELIANC")
 
 
 def test_rebuild_adjusted_excludes_later_splits():
@@ -288,15 +299,62 @@ def test_server_module_imports():
 
 
 def test_stdio_no_stdout_pollution():
-    """Starting the server must not write to stdout (only to stderr)."""
+    """The server's stdout must carry only valid JSON-RPC messages.
+
+    Sends a real MCP ``initialize`` request over stdin (LSP-style framing
+    as used by the MCP stdio transport), then asserts every stdout line is
+    parseable JSON-RPC (no empty lines, no prose, no tracebacks). The
+    timeout is 60s because the cold import alone is ~10s (pandas + yfinance
+    + fastmcp); 10s intermittently killed the process mid-startup.
+    """
+    import json as _json
+
+    init_req = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "pytest-probe", "version": "0.0.0"},
+        },
+    }
     proc = subprocess.Popen(
         [sys.executable, "-m", "stock_analyst_mcp.server"],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True,
     )
     try:
-        proc.stdin.close()
-        out, _err = proc.communicate(timeout=10)
-        assert out == "", f"server wrote to stdout (should be stderr only): {out!r}"
+        proc.stdin.write(_json.dumps(init_req) + "\n")
+        proc.stdin.flush()
+        # Give the server a bounded window to answer; read one response line.
+        import time as _time
+
+        deadline = _time.time() + 60
+        first_line: str | None = None
+        while _time.time() < deadline:
+            line = proc.stdout.readline()
+            if line == "":  # EOF before any response — treated below
+                break
+            if line.strip():
+                first_line = line.strip()
+                break
+        assert first_line is not None, (
+            "server closed stdout without answering initialize "
+            f"(stderr head: {proc.stderr.readline() if proc.stderr else ''!r})"
+        )
+        msg = _json.loads(first_line)  # raises on garbage/empty/prose lines
+        assert msg.get("jsonrpc") == "2.0"
+        assert msg.get("id") == 1
+        server_info = msg["result"]["serverInfo"]
+        assert server_info["name"] == "stock-analyst-mcp"
+        # serverInfo.version must reflect the package, not the SDK (1.12.4)
+        assert server_info["version"] != "1.12.4"
+        assert server_info["version"] == stock_analyst_mcp.__version__
     finally:
         proc.kill()
+    # Drain what remains and re-assert purity of the whole stream.
+    _rest = proc.stdout.read() if proc.stdout else ""
+    for line in (_rest or "").splitlines():
+        if line.strip():
+            _json.loads(line)  # any non-JSON line fails here
