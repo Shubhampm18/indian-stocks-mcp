@@ -9,7 +9,7 @@ A vendor's "adjusted close" is not a fact about a past day — it is that day's
 close multiplied by every split and dividend that happened since. So the same
 date reads differently depending on when you ask:
 
-![Same day, same stock: as printed then vs as adjusted today](docs/media/vintage_drift.svg)
+![Same day, same stock: as printed then vs as adjusted today](https://raw.githubusercontent.com/Shubhampm18/indian-stocks-mcp/main/docs/media/vintage_drift.svg)
 
 > TCS on 2018-04-30: the close printed that day was INR 1,766.05. Today's
 > adjusted series reports INR 1,415.63 for the same day — 19.8% lower. A stop
@@ -110,7 +110,7 @@ Leak + pattern suites: 41 passing (21 point-in-time/leak/provenance tests + 20 c
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/Shubhampm18/indian-stocks-mcp/blob/main/LICENSE).
 
 ## Credits
 
