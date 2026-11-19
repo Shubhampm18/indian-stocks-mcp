@@ -9,7 +9,7 @@ data after it.
 ```bash
 uvx stock-analyst-mcp        # from PyPI (no API key)
 # or from a local build:
-uvx --from ./dist/stock_analyst_mcp-0.1.2-py3-none-any.whl stock-analyst-mcp
+uvx --from ./dist/stock_analyst_mcp-0.2.0-py3-none-any.whl stock-analyst-mcp
 ```
 
 ## Install
@@ -18,7 +18,7 @@ uvx --from ./dist/stock_analyst_mcp-0.1.2-py3-none-any.whl stock-analyst-mcp
 uv sync
 uv run pytest -q            # leak + pattern suites
 uv build
-uvx --from ./dist/stock_analyst_mcp-0.1.2-py3-none-any.whl stock-analyst-mcp
+uvx --from ./dist/stock_analyst_mcp-0.2.0-py3-none-any.whl stock-analyst-mcp
 ```
 
 ## MCP client config
@@ -50,12 +50,12 @@ Claude Desktop (config: `claude_desktop_config.json`), Cursor (`.cursor/mcp.json
 | `get_ohlcv(symbol, as_of?, lookback_days=90)` | Daily OHLC + rebuilt adjusted close + `adjustment_history` |
 | `get_returns(symbol, as_of?, windows=[1,5,20,60])` | Simple/log returns per window (pandas) |
 | `get_technical_indicators(symbol, as_of?, indicators=[…])` | SMA/EMA/RSI/MACD/Bollinger/ATR/VWAP computed in Python, never LLM math; `trend` field |
-| `get_chart_patterns(symbol, as_of?, lookback_days=120)` | Candlestick patterns (hammer, shooting star, doji, engulfing, stars) over the last 20 bars + pivot support/resistance levels with nearest levels |
+| `get_chart_patterns(symbol, as_of?, lookback_days=120, window=20)` | Candlestick patterns (hammer, shooting star, doji, engulfing, stars) over the last `window` bars + pivot support/resistance levels with nearest levels |
 | `get_risk_metrics(symbol, as_of?, benchmark="^NSEI", lookback_days=252)` | Sharpe, Sortino, max drawdown (start/end), volatility, beta, alpha |
 | `get_index_history(index, as_of?, lookback_days=90)` | `^NSEI` / `^BSESN` / `^NSEBANK` close series |
 | `get_peer_comparison(symbols, as_of?, metric="return_20d")` | Side-by-side values + ranks on one metric |
 
-Every output carries `source` (`"yfinance"`), `as_of` (echoed), and `currency` (`"INR"`).
+Every output carries `source` (`"yfinance"`), `as_of` (echoed), `data_through`, `rows_used` (rows available after as_of filtering, before lookback trimming), and `currency` (`"INR"`).
 
 ## Demo
 
@@ -69,7 +69,7 @@ get_peer_comparison(symbols=["RELIANCE.NS", "TCS.NS"], as_of="2025-12-31", metri
 
 ## How this differs from existing NSE MCP servers (measured, Nov 2026)
 
-- **FinMCP** ([Finance-LLMs/FinMCP](https://github.com/Finance-LLMs/FinMCP), MIT) fetches live NSE/BSE quotes via `nsepython`/`bse` (see `MCP_tools/indian_markets.py`) — **no `as_of` parameter, no test directory**; the comparison script `scripts/compare_finmcp.py` runs the same 3 queries against both servers.
+- **FinMCP** ([Finance-LLMs/FinMCP](https://github.com/Finance-LLMs/FinMCP), MIT) fetches live NSE/BSE quotes via `nsepython`/`bse` (see `MCP_tools/indian_markets.py`) — **no `as_of` parameter, no test directory**. A side-by-side comparison run (same 3 queries against both servers) was performed during development but is **not re-runnable from this repo** — the comparison script was never committed.
 - **Tapetide** (48 tools) advertises point-in-time tools but runs on a closed remote (`mcp.tapetide.com`); the public repo is only a stdio→HTTPS bridge with zero date logic.
 - This server's value is the last two columns: mandatory `as_of` with server-side enforcement, and a runnable leak suite (`tests/test_leak.py`: cutoff shrink, canary spike, future-date error, vintage rebuild, pandas recomputation match).
 
@@ -86,7 +86,11 @@ get_peer_comparison(symbols=["RELIANCE.NS", "TCS.NS"], as_of="2025-12-31", metri
 uv run pytest -q
 ```
 
-Leak + pattern suites: 34 passing (16 point-in-time/leak tests + 18 chart-pattern tests; the 3 network-dependent leak tests skip when offline — the pure-logic cutoff/vintage/pattern tests never skip).
+Leak + pattern suites: 40 passing (21 point-in-time/leak/provenance tests + 19 chart-pattern tests; the 3 network-dependent leak tests skip when offline — the pure-logic cutoff/vintage/pattern tests never skip).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 ## Credits
 
