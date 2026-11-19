@@ -23,10 +23,8 @@ chart patterns (candlesticks + support/resistance), risk metrics, index history,
 peer comparison — all cut off at `as_of`.
 
 ```bash
-# From a local build (no API key, no account):
-uvx --from ./dist/indian_stocks_mcp-0.3.0-py3-none-any.whl indian-stocks-mcp
-# Once published to PyPI:
-uvx indian-stocks-mcp
+# Install from the release (no account, no API key):
+uvx --from https://github.com/Shubhampm18/indian-stocks-mcp/releases/download/v0.3.0/indian_stocks_mcp-0.3.0-py3-none-any.whl indian-stocks-mcp
 ```
 
 ## Install
@@ -35,17 +33,19 @@ uvx indian-stocks-mcp
 uv sync
 uv run pytest -q            # leak + pattern suites
 uv build
-uvx --from ./dist/indian_stocks_mcp-0.3.0-py3-none-any.whl indian-stocks-mcp
+uvx --from https://github.com/Shubhampm18/indian-stocks-mcp/releases/download/v0.3.0/indian_stocks_mcp-0.3.0-py3-none-any.whl indian-stocks-mcp
 ```
+
+From a local build instead: `uv build && uvx --from ./dist/indian_stocks_mcp-0.3.0-py3-none-any.whl indian-stocks-mcp`.
 
 ## MCP client config
 
 ```json
 {
   "mcpServers": {
-    "stock-analyst": {
+    "indian-stocks": {
       "command": "uvx",
-      "args": ["--from", "/absolute/path/to/stock-analyst-mcp/dist/indian_stocks_mcp-0.3.0-py3-none-any.whl", "indian-stocks-mcp"]
+      "args": ["--from", "https://github.com/Shubhampm18/indian-stocks-mcp/releases/download/v0.3.0/indian_stocks_mcp-0.3.0-py3-none-any.whl", "indian-stocks-mcp"]
     }
   }
 }
