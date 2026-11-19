@@ -41,7 +41,7 @@ log = logging.getLogger("stock_analyst_mcp.server")
 try:
     _PACKAGE_VERSION = metadata.version("indian-stocks-mcp")
 except metadata.PackageNotFoundError:  # not installed (e.g. bare src checkout)
-    _PACKAGE_VERSION = "0.2.2"  # literal fallback: keep in sync with pyproject.toml
+    _PACKAGE_VERSION = "0.3.0"  # literal fallback: keep in sync with pyproject.toml
 
 mcp = FastMCP(
     "indian-stocks-mcp",  # product identity (import package stays stock_analyst_mcp)

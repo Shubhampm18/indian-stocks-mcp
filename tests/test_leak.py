@@ -20,6 +20,7 @@ import stock_analyst_mcp
 from stock_analyst_mcp.data import (
     FutureDateError,
     enforce_as_of,
+    fetch_actions,
     fetch_history,
     normalise_symbol,
     rebuild_adjusted_with_actions,
@@ -170,8 +171,12 @@ def test_did_you_mean_handles_transposition():
     assert "RELIANCE.NS" in _did_you_mean("RELIANC")
 
 
-def test_rebuild_adjusted_excludes_later_splits():
-    """A split with ex_date AFTER as_of must not change earlier prices."""
+def test_rebuild_adjusted_does_not_reapply_splits():
+    """A split row must never rescale prices: yfinance's Close is ALREADY
+    split-adjusted, so applying 1/ratio again halves every pre-split row and
+    manufactures a fake +100% jump on the ex-date (a real bug: RELIANCE 2024
+    bonus turned into a +86.8% 20-day return).
+    """
     df = pd.DataFrame({
         "Close": [100.0, 100.0, 100.0, 100.0],
         "Open": [100.0] * 4, "High": [100.0] * 4, "Low": [100.0] * 4, "Volume": [1000] * 4,
@@ -180,15 +185,69 @@ def test_rebuild_adjusted_excludes_later_splits():
         {"Stock Splits": [0.0, 2.0], "Dividends": [0.0, 0.0]},
         index=pd.to_datetime(["2023-01-02", "2023-06-01"]),
     )
+    # as_of before the split: the action is invisible, prices untouched
     adj, hist = rebuild_adjusted_with_actions(df, actions, date(2023, 1, 3))
-    # No split applied (the June split is after as_of) -> flat 100
-    assert adj.iloc[0] == 100.0
-    assert adj.iloc[-1] == 100.0
+    assert list(adj) == [100.0] * 4
     assert hist == []
-    # With a later as_of (after the split), earlier prices halve
+    # as_of after the split: still untouched (source already adjusted it),
+    # and the history says so instead of claiming a factor was applied
     adj2, hist2 = rebuild_adjusted_with_actions(df, actions, date(2023, 6, 2))
-    assert adj2.iloc[0] == 50.0
+    assert list(adj2) == [100.0] * 4
     assert hist2 and hist2[-1]["type"] == "split"
+    assert hist2[-1]["applied"] is False
+    assert hist2[-1]["ratio"] == 2.0
+
+
+def test_no_fake_return_across_a_vendor_split(sample_date, history):
+    """Regression for the real-data bug: a continuous price series with a
+    split row must produce no cliff and no invented return."""
+    closes = [100.0] * 20 + [100.2] * 20
+    idx = pd.bdate_range(end=sample_date, periods=40)
+    df = pd.DataFrame({"Close": closes, "Open": closes, "High": closes,
+                       "Low": closes, "Volume": [1000] * 40}, index=idx)
+    split_day = idx[20]
+    actions = pd.DataFrame({"Stock Splits": [2.0], "Dividends": [0.0]}, index=[split_day])
+    adj, _ = rebuild_adjusted_with_actions(df, actions, _parse_as_of(sample_date))
+    one_day = adj.iloc[20] / adj.iloc[19] - 1
+    assert abs(one_day) < 0.01, f"cliff across the split: {one_day:.1%}"
+    twenty_day = adj.iloc[30] / adj.iloc[10] - 1
+    assert abs(twenty_day) < 0.01, f"fabricated return across the split: {twenty_day:.1%}"
+
+
+def test_dividend_is_rebased_across_a_later_split():
+    """As-filed dividends are in a pre-split basis; the factor method must use
+    the post-split cash equivalent (10 pre-split, 2:1 split later -> 5)."""
+    df = pd.DataFrame({
+        "Close": [100.0, 100.0, 100.0, 100.0],
+        "Open": [100.0] * 4, "High": [100.0] * 4, "Low": [100.0] * 4, "Volume": [1000] * 4,
+    }, index=pd.to_datetime(["2023-01-02", "2023-01-03", "2023-01-04", "2023-01-05"]))
+    actions = pd.DataFrame(
+        {"Stock Splits": [0.0, 2.0], "Dividends": [10.0, 0.0]},
+        index=pd.to_datetime(["2023-01-04", "2023-02-01"]),
+    )
+    adj, hist = rebuild_adjusted_with_actions(df, actions, date(2023, 3, 1))
+    div = [h for h in hist if h["type"] == "dividend"][-1]
+    assert div["effective_amount"] == pytest.approx(5.0, abs=1e-9)
+    assert div["factor"] == pytest.approx(0.95, abs=1e-9)
+    assert adj.iloc[0] == pytest.approx(95.0, abs=1e-9)
+    assert adj.iloc[-1] == 100.0
+
+
+def test_rebuild_matches_vendor_adj_close():
+    """With every action applied, the rebuild should land near the vendor's
+    Adj Close for real cached data (both are dividend-adjusted)."""
+    pytest.importorskip("yfinance")
+    try:
+        raw = fetch_history("RELIANCE.NS")
+    except Exception:  # offline with no cache
+        pytest.skip("no cached data / network for RELIANCE.NS")
+    if raw.empty:
+        pytest.skip("no RELIANCE.NS rows")
+    actions = fetch_actions("RELIANCE.NS")
+    adj, _ = rebuild_adjusted_with_actions(raw, actions, None)
+    vendor = raw["Adj Close"].astype(float)
+    rel = ((adj - vendor).abs() / vendor).tail(500).median()
+    assert rel < 0.02, f"rebuild diverges from vendor Adj Close: median {rel:.2%}"
 
 
 def test_dividend_adjustment_factor_method():

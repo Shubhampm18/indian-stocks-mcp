@@ -220,42 +220,78 @@ def fetch_actions(symbol: str) -> pd.DataFrame:
 
 def rebuild_adjusted_with_actions(df: pd.DataFrame, actions: pd.DataFrame,
                                   as_of: date | None) -> tuple[pd.Series, list[dict[str, Any]]]:
-    """Rebuild adjusted close using the standard factor method.
+    """Rebuild adjusted close on a *split-adjusted* price series.
 
-    For each corporate action with ex_date <= as_of:
-      split:    factor = 1 / split_ratio          (e.g. 1:2 split -> 0.5)
-      dividend: factor = 1 - div / close_on_day_before_ex_date
-    All pre-ex prices are multiplied by factor (cumulative). Actions with
-    ex_date > as_of are skipped, so a later split/dividend cannot change
+    Vendor convention (verified against yfinance 1.8): ``Close`` is **already
+    split-adjusted** and **not** dividend-adjusted; ``Adj Close`` is both.
+    Therefore split ratios must NOT be re-applied to ``Close`` — doing so
+    halves every pre-split row and manufactures a fake +100% jump on the
+    ex-date (the bug this function used to have). Splits are recorded in
+    ``adjustment_history`` as ``applied: False`` with the reason.
+
+    Dividends are as-filed (pre-split basis), so each one is rebased onto the
+    current share basis before the standard factor method is applied:
+
+        effective = amount / product(split_ratio for splits with ex_date > ex)
+        factor    = 1 - effective / close_on_day_before_ex
+
+    All pre-ex prices are multiplied by the cumulative factor. For dividends,
+    actions with ex_date > as_of are skipped, so a later dividend cannot change
     an earlier price — the point-in-time (vintage) guarantee.
+
+    Limitation, stated rather than hidden: because ``Close`` is retroactively
+    split-adjusted upstream, the as-filed *price* of a pre-split date is not
+    recoverable from this source. Ratios and returns are unaffected; absolute
+    pre-split levels are in the current share basis. ``adjustment_history``
+    reports this per split.
     """
     raw = df["Close"].astype(float).copy()
     adj = raw.copy()
     history: list[dict[str, Any]] = []
     if actions is None or actions.empty:
         return adj, history
+
+    # Split ratios by ex-date: needed only to rebase as-filed dividends.
+    split_ratios: dict[date, float] = {}
+    for ex_date, row in actions.iterrows():
+        ratio = float(row.get("Stock Splits", 0.0)) if "Stock Splits" in row else 0.0
+        if ratio and ratio > 0:
+            split_ratios[pd.Timestamp(ex_date).date()] = ratio
+
     for ex_date, row in actions.iterrows():
         ex = pd.Timestamp(ex_date).date()
         if as_of is not None and ex > as_of:
             continue  # later action cannot affect earlier adjustment
-        split = float(row.get("Stock Splits", 0.0)) if "Stock Splits" in row else 0.0
-        if split and split > 0:
-            factor = 1.0 / split
-            history.append({"ex_date": str(ex), "type": "split", "factor": round(factor, 8)})
-            mask = adj.index.date < ex
-            adj.loc[mask] = adj.loc[mask] * factor
+
+        split = split_ratios.get(ex, 0.0)
+        if split:
+            history.append({
+                "ex_date": str(ex), "type": "split", "ratio": split,
+                "applied": False,
+                "reason": "vendor Close is already split-adjusted; "
+                          "as-filed pre-split price not recoverable from source",
+            })
+
         div = float(row.get("Dividends", 0.0)) if "Dividends" in row else 0.0
         if div and div > 0:
-            # close on the last day before ex-date (from raw, not partially adjusted)
+            # Rebase the as-filed cash into the current (post-split) share basis.
+            scale = 1.0
+            for split_ex, ratio in split_ratios.items():
+                if split_ex > ex:
+                    scale *= ratio
+            effective = div / scale
+
             pre = raw[raw.index.date < ex]
             if pre.empty:
                 continue
             close_before = float(pre.iloc[-1])
             if close_before <= 0:
                 continue
-            factor = 1.0 - div / close_before
+            factor = 1.0 - effective / close_before
             history.append({"ex_date": str(ex), "type": "dividend",
-                            "amount": round(div, 4), "factor": round(factor, 8)})
+                            "amount": round(div, 4),
+                            "effective_amount": round(effective, 4),
+                            "factor": round(factor, 8)})
             mask = adj.index.date < ex
             adj.loc[mask] = adj.loc[mask] * factor
     return adj, history

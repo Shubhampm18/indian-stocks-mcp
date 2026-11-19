@@ -1,15 +1,32 @@
 # indian-stocks-mcp
 
-MCP server for India-only (NSE/BSE) stock analysis. Seven tools over historical
-price data — OHLC, returns, technical indicators, chart patterns (candlesticks
-+ support/resistance), risk metrics, index history, peer comparison — where
-every tool takes an `as_of` cutoff and the server physically cannot return
-data after it.
+**A stock MCP server that cannot answer with the future.** Every tool takes an
+`as_of` (YYYY-MM-DD) cutoff; rows after it are filtered in one place, and
+adjusted prices are rebuilt from the corporate actions that were actually known
+by then.
+
+A vendor's "adjusted close" is not a fact about a past day — it is that day's
+close multiplied by every split and dividend that happened since. So the same
+date reads differently depending on when you ask:
+
+![Same day, same stock: as printed then vs as adjusted today](docs/media/vintage_drift.svg)
+
+> TCS on 2018-04-30: the close printed that day was INR 1,766.05. Today's
+> adjusted series reports INR 1,415.63 for the same day — 19.8% lower. A stop
+> level or a position size computed on the second number was decided with
+> information from the future.
+
+Run the measurement yourself: `uv run python demo/vintage_drift.py`.
+
+Seven tools over historical price data — OHLC, returns, technical indicators,
+chart patterns (candlesticks + support/resistance), risk metrics, index history,
+peer comparison — all cut off at `as_of`.
 
 ```bash
-# Distributed as **indian-stocks-mcp** (the previous name `stock-analyst-mcp` belongs to an unrelated PyPI project, so this server is not installable under it).
-# Run from a local build (no API key):
-uvx --from ./dist/indian_stocks_mcp-0.2.2-py3-none-any.whl indian-stocks-mcp
+# From a local build (no API key, no account):
+uvx --from ./dist/indian_stocks_mcp-0.3.0-py3-none-any.whl indian-stocks-mcp
+# Once published to PyPI:
+uvx indian-stocks-mcp
 ```
 
 ## Install
@@ -18,7 +35,7 @@ uvx --from ./dist/indian_stocks_mcp-0.2.2-py3-none-any.whl indian-stocks-mcp
 uv sync
 uv run pytest -q            # leak + pattern suites
 uv build
-uvx --from ./dist/indian_stocks_mcp-0.2.2-py3-none-any.whl indian-stocks-mcp
+uvx --from ./dist/indian_stocks_mcp-0.3.0-py3-none-any.whl indian-stocks-mcp
 ```
 
 ## MCP client config
@@ -28,7 +45,7 @@ uvx --from ./dist/indian_stocks_mcp-0.2.2-py3-none-any.whl indian-stocks-mcp
   "mcpServers": {
     "stock-analyst": {
       "command": "uvx",
-      "args": ["--from", "/absolute/path/to/stock-analyst-mcp/dist/indian_stocks_mcp-0.2.2-py3-none-any.whl", "indian-stocks-mcp"]
+      "args": ["--from", "/absolute/path/to/stock-analyst-mcp/dist/indian_stocks_mcp-0.3.0-py3-none-any.whl", "indian-stocks-mcp"]
     }
   }
 }
@@ -39,7 +56,8 @@ Claude Desktop (config: `claude_desktop_config.json`), Cursor (`.cursor/mcp.json
 ## The `as_of` guarantee
 
 - Every tool accepts `as_of` (YYYY-MM-DD). All rows are filtered to `date <= as_of` in a single helper (`enforce_as_of` in `src/stock_analyst_mcp/data.py`), and the response echoes `data_through`.
-- Adjusted prices are **rebuilt from corporate actions with ex-date ≤ as_of only** — a split announced later cannot change an earlier price. Dividends use the standard factor method: `factor = 1 - div / close_on_day_before_ex_date`, multiplied into all pre-ex prices (not flat cash subtraction). (This is the adjustment-vintage test in `tests/test_leak.py`.)
+- Adjusted prices are **rebuilt from corporate actions with ex-date ≤ as_of only** — a dividend paid later cannot change an earlier price. Dividends use the standard factor method: `factor = 1 - div / close_on_day_before_ex_date`, multiplied into all pre-ex prices (not flat cash subtraction), with the as-filed cash rebased into the current share basis when a split happened afterwards. (This is the adjustment-vintage test in `tests/test_leak.py`.)
+- **Splits are already adjusted by the source.** yfinance's `Close` is split-adjusted, so this server deliberately does *not* re-apply split ratios (doing so halves every pre-split row and invents a ~+100% jump on the ex-date). `adjustment_history` records each split with `applied: false` and the reason. Consequence, stated plainly: the as-filed **price** of a pre-split date cannot be recovered from this source — ratios and returns are unaffected, absolute pre-split levels are in the current share basis.
 - A future `as_of` raises `isError: true`; an unknown symbol raises `isError: true` with "Did you mean …?" suggestions.
 - Nothing is printed to stdout (stdio JSON-RPC would corrupt); all logging goes to stderr.
 
