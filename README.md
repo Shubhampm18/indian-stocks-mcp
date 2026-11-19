@@ -7,9 +7,9 @@ every tool takes an `as_of` cutoff and the server physically cannot return
 data after it.
 
 ```bash
-uvx stock-analyst-mcp        # from PyPI (no API key)
-# or from a local build:
-uvx --from ./dist/stock_analyst_mcp-0.2.0-py3-none-any.whl stock-analyst-mcp
+# Not on PyPI — the distribution name belongs to an unrelated package.
+# Run from a local build (no API key):
+uvx --from ./dist/stock_analyst_mcp-0.2.1-py3-none-any.whl stock-analyst-mcp
 ```
 
 ## Install
@@ -18,7 +18,7 @@ uvx --from ./dist/stock_analyst_mcp-0.2.0-py3-none-any.whl stock-analyst-mcp
 uv sync
 uv run pytest -q            # leak + pattern suites
 uv build
-uvx --from ./dist/stock_analyst_mcp-0.2.0-py3-none-any.whl stock-analyst-mcp
+uvx --from ./dist/stock_analyst_mcp-0.2.1-py3-none-any.whl stock-analyst-mcp
 ```
 
 ## MCP client config
@@ -28,7 +28,7 @@ uvx --from ./dist/stock_analyst_mcp-0.2.0-py3-none-any.whl stock-analyst-mcp
   "mcpServers": {
     "stock-analyst": {
       "command": "uvx",
-      "args": ["stock-analyst-mcp"]
+      "args": ["--from", "/absolute/path/to/stock-analyst-mcp/dist/stock_analyst_mcp-0.2.1-py3-none-any.whl", "stock-analyst-mcp"]
     }
   }
 }
